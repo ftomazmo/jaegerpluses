@@ -23,3 +23,8 @@ curl http://localhost:5000
 curl http://localhost:8080/rolldice
 ```
 Check traces on Jaeger on browser [http://localhost:16686](http://localhost:16686)
+
+To clean up your environment:
+```sh
+kind delete clusters kind
+```
