@@ -1,4 +1,4 @@
-Build the images
+Build the images (only if you are me, otherwise jump to the next step. This images are already available publicly)
 ```sh
 docker build -f ./otel-flask/Dockerfile --push -t ftomazmo/otel-flask ./otel-flask
 docker build -f ./otel-node/Dockerfile --push -t ftomazmo/otel-node ./otel-node
