@@ -1,0 +1,304 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: development
+  labels:
+    name: development
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch
+  namespace: development
+  labels:
+    app: elasticsearch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+        - name: elasticsearch
+          image: elasticsearch:7.12.1
+          ports:
+            - name: es-http
+              containerPort: 9200
+            - name: es-intern
+              containerPort: 9300
+          env:
+            - name: discovery.type
+              value: 'single-node'
+            - name: bootstrap.memory_lock
+              value: 'true'
+            - name: ES_JAVA_OPTS
+              value: '-Xms512m -Xmx512m'
+          imagePullPolicy: Always
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  namespace: development
+  labels:
+    app: elasticsearch
+spec:
+  ports:
+    - name: intern-es
+      port: 9200
+      targetPort: 9200
+    - name: http-es
+      port: 9300
+      targetPort: 9300
+  selector:
+    app: elasticsearch
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: development
+  labels:
+    app: jaeger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: jaeger
+    spec:
+      containers:
+        - name: jaeger
+          image: jaegertracing/jaeger-collector:latest
+          args:
+            - '--log-level=debug'
+          ports:
+            - name: jaeger-grpc
+              containerPort: 4317
+            - name: jaeger-http
+              containerPort: 4318
+            - name: jaeger-probe
+              containerPort: 14269
+          env:
+            - name: COLLECTOR_OTLP_ENABLED
+              value: 'true'
+            - name: SPAN_STORAGE_TYPE
+              value: 'opensearch'
+            - name: ES_VERSION
+              value: '7'
+            - name: ES_TLS_ENABLED
+              value: 'false'
+            - name: ES_SERVER_URLS
+              value: 'http://elasticsearch:9200'
+          resources:
+            limits:
+              memory: 1G
+            requests:
+              cpu: 100m
+              memory: 1G
+          imagePullPolicy: Always
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger
+  namespace: development
+  labels:
+    app: jaeger
+spec:
+  ports:
+    - name: grpc-jaeger
+      port: 4317
+      targetPort: 4317
+    - name: http-jaeger
+      port: 4318
+      targetPort: 4318
+  selector:
+    app: jaeger
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger-web
+  namespace: development
+  labels:
+    app: jaeger-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger-web
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: jaeger-web
+    spec:
+      containers:
+        - name: jaeger-web
+          image: jaegertracing/jaeger-query:latest
+          args:
+            - '--log-level=debug'
+          ports:
+            - name: jaeger-web
+              containerPort: 16686
+            - name: jaeger-probe
+              containerPort: 16687
+          env:
+            - name: COLLECTOR_OTLP_ENABLED
+              value: 'true'
+            - name: SPAN_STORAGE_TYPE
+              value: 'opensearch'
+            - name: ES_VERSION
+              value: '7'
+            - name: ES_TLS_ENABLED
+              value: 'false'
+            - name: ES_SERVER_URLS
+              value: 'http://elasticsearch:9200'
+          resources:
+            limits:
+              memory: 1G
+            requests:
+              cpu: 100m
+              memory: 1G
+          imagePullPolicy: Always
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger-web
+  namespace: development
+  labels:
+    app: jaeger-web
+spec:
+  ports:
+    - name: web-jaeger
+      protocol: TCP
+      port: 16686
+      targetPort: 16686
+  selector:
+    app: jaeger-web
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask
+  namespace: development
+  labels:
+    app: flask
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flask
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: flask
+    spec:
+      containers:
+        - name: flask
+          image: ftomazmo/otel-flask:latest
+          command:
+            - python
+            - app.py
+          ports:
+            - name: flask-http
+              containerPort: 5000
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: 'http://jaeger:4317'
+            - name: OTLP_ENABLED
+              value: 'YES'
+            - name: OTEL_ENDPOINT_REQUEST_ATTRIBUTE_ENABLED
+              value: 'YES'
+            - name: OTEL_SERVICE_NAME
+              value: 'flask-otel'
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT_GRPC
+              value: 'YES'
+          imagePullPolicy: Always
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flask-web
+  namespace: development
+  labels:
+    app: flask
+spec:
+  ports:
+    - name: web-flask
+      protocol: TCP
+      port: 5000
+      targetPort: 5000
+  selector:
+    app: flask
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nodejs
+  namespace: development
+  labels:
+    app: nodejs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nodejs
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: nodejs
+    spec:
+      containers:
+        - name: nodejs
+          image: ftomazmo/otel-node:latest
+          ports:
+            - name: nodejs-http
+              containerPort: 8080
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: 'http://jaeger:4317'
+            - name: OTLP_ENABLED
+              value: 'YES'
+            - name: OTEL_SERVICE_NAME
+              value: 'nodejs-otel'
+          imagePullPolicy: Always
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodejs-web
+  namespace: development
+  labels:
+    app: nodejs
+spec:
+  ports:
+    - name: web-nodejs
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: nodejs
+  type: ClusterIP
